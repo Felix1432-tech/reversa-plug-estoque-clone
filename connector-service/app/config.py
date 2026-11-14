@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # Google Drive
     google_service_account_json: str = ""
 
+    # Supabase Auth (server-side JWT verification)
+    supabase_url: str = ""
+    supabase_jwt_audience: str = "authenticated"
+    cors_allowed_origins: str = ""  # comma-separated exact origins; empty = no browser origins
+
     # App
     app_env: str = "development"
     log_level: str = "INFO"

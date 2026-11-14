@@ -1,5 +1,4 @@
 import uuid
-import asyncio
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -121,8 +120,8 @@ async def run_connector(
         from app.db.session import async_session_factory
         async with async_session_factory() as session:
             runner = ConnectorRunner(session)
-            await runner.run_extraction(config_id, user_id)
+            await runner.run_extraction(config_id, user_id, log_id=log.id)
 
-    background_tasks.add_task(asyncio.ensure_future, _run())
+    background_tasks.add_task(_run)
 
     return RunConnectorResponse(log_id=log.id, status="running")

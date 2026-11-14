@@ -37,17 +37,21 @@ class ConnectorRunner:
         finally:
             await connector.close()
 
-    async def run_extraction(self, config_id: uuid.UUID, user_id: uuid.UUID) -> uuid.UUID:
+    async def run_extraction(self, config_id: uuid.UUID, user_id: uuid.UUID, log_id: uuid.UUID | None = None) -> uuid.UUID:
         config = await self.dist_repo.get_by_id(config_id, user_id)
         if not config:
             raise ValueError("Distribuidor não encontrado")
 
-        # Check for running extraction
-        running = await self.log_repo.has_running(config_id)
-        if running:
-            raise ValueError(f"Extração já em andamento: {running.id}")
-
-        log = await self.log_repo.create(config_id)
+        # The API route reserves the log before scheduling work. Reuse that log.
+        if log_id is not None:
+            log = await self.log_repo.get_by_id(log_id)
+            if not log or log.distributor_config_id != config_id or log.status != "running":
+                raise ValueError("Invalid or inactive extraction log")
+        else:
+            running = await self.log_repo.has_running(config_id)
+            if running:
+                raise ValueError(f"Extração já em andamento: {running.id}")
+            log = await self.log_repo.create(config_id)
         credentials = self.dist_repo.decrypt_credentials(config)
         connector = get_connector(config.distributor_type, credentials, config.settings)
 
@@ -88,7 +92,9 @@ class ConnectorRunner:
 
             # Mark absent products as unavailable
             found_skus = [p.sku for p in products]
-            absent_count = await self.product_repo.mark_absent_unavailable(config_id, found_skus)
+            # A scraper cannot prove a complete catalog snapshot. Never mark
+            # missing SKUs unavailable based on a potentially partial extraction.
+            absent_count = 0
 
             # Update distributor status
             await self.dist_repo.update_last_sync(config, datetime.now(timezone.utc))
